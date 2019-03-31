@@ -58,13 +58,12 @@ if [ $currentuser != "root" ]; then
     exit 1
 fi
 
-#check that we are in ubuntu 16.04
+#check that we are in ubuntu 16.04+
 
-fgrep "16.04" /etc/os-release >/dev/null 2>&1
-
-if [ $? -eq 0 ]; then
-     ub1604="yes"
-fi
+case "$(lsb_release -rs)" in
+    16*|18*) ub1604="yes" ;;
+    *) ub1604="" ;;
+esac
 
 #get the latest versions of Ubuntu LTS
 
@@ -75,6 +74,7 @@ wget -O $tmphtml 'http://releases.ubuntu.com/' >/dev/null 2>&1
 prec=$(fgrep Precise $tmphtml | head -1 | awk '{print $3}')
 trus=$(fgrep Trusty $tmphtml | head -1 | awk '{print $3}')
 xenn=$(fgrep Xenial $tmphtml | head -1 | awk '{print $3}')
+bion=$(fgrep Bionic $tmphtml | head -1 | awk '{print $3}')
 
 
 
@@ -85,8 +85,9 @@ while true; do
     echo "  [1] Ubuntu $prec LTS Server amd64 - Precise Pangolin"
     echo "  [2] Ubuntu $trus LTS Server amd64 - Trusty Tahr"
     echo "  [3] Ubuntu $xenn LTS Server amd64 - Xenial Xerus"
+    echo "  [4] Ubuntu $bion LTS Server amd64 - Bionic Beaver"
     echo
-    read -p " please enter your preference: [1|2|3]: " ubver
+    read -p " please enter your preference: [1|2|3|4]: " ubver
     case $ubver in
         [1]* )  download_file="ubuntu-$prec-server-amd64.iso"           # filename of the iso to be downloaded
                 download_location="http://releases.ubuntu.com/$prec/"     # location of the file to be downloaded
@@ -100,13 +101,17 @@ while true; do
                 download_location="http://releases.ubuntu.com/$xenn/"
                 new_iso_name="ubuntu-$xenn-server-amd64-unattended.iso"
                 break;;
-        * ) echo " please answer [1], [2] or [3]";;
+        [4]* )  download_file="ubuntu-$bion-server-amd64.iso"
+                download_location="http://cdimage.ubuntu.com/releases/$bion/release/"
+                new_iso_name="ubuntu-$bion-server-amd64-unattended.iso"
+                break;;
+        * ) echo " please answer [1], [2], [3] or [4]";;
     esac
 done
 
 if [ -f /etc/timezone ]; then
   timezone=`cat /etc/timezone`
-elif [ -h /etc/localtime]; then
+elif [ -h /etc/localtime ]; then
   timezone=`readlink /etc/localtime | sed "s/\/usr\/share\/zoneinfo\///"`
 else
   checksum=`md5sum /etc/localtime | cut -d' ' -f1`
@@ -162,7 +167,7 @@ fi
 if [[ $bootable == "yes" ]] || [[ $bootable == "y" ]]; then
     if [ $(program_is_installed "isohybrid") -eq 0 ]; then
       #16.04
-      if [ $ub1604 == "yes" ]; then
+      if [[ $ub1604 == "yes" || $(lsb_release -cs) == "artful" ]]; then
         (apt-get -y install syslinux syslinux-utils > /dev/null 2>&1) &
         spinner $!
       else
@@ -202,13 +207,8 @@ sed -i -r 's/timeout\s+[0-9]+/timeout 1/g' $tmp/iso_new/isolinux/isolinux.cfg
 
 # set late command
 
-if [ $ub1604 == "yes" ]; then
-   late_command="apt-install wget; in-target wget --no-check-certificate -O /home/$username/start.sh https://github.com/netson/ubuntu-unattended/raw/master/start.sh ;\
-     in-target chmod +x /home/$username/start.sh ;"
-else 
-   late_command="chroot /target wget -O /home/$username/start.sh https://github.com/netson/ubuntu-unattended/raw/master/start.sh ;\
+   late_command="chroot /target curl -L -o /home/$username/start.sh https://raw.githubusercontent.com/netson/ubuntu-unattended/master/start.sh ;\
      chroot /target chmod +x /home/$username/start.sh ;"
-fi
 
 
 
